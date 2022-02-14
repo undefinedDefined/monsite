@@ -38,7 +38,7 @@ class Form extends Model
 
                 // On récupère les informations des colonnes de la table
                 $sql = "SHOW COLUMNS FROM " . $this->getTab();
-                $data = [];
+                $data = array();
                 foreach ($this->getData($sql) as $col) {
                     // On crée un tableau associatif de type : $nomColonne => array $typeColonne (sans alias)
                     $data[$col['Field']] = explode(" ", $col['Type']);
@@ -115,6 +115,13 @@ class Form extends Model
         }
     }
 
+    /**
+     * Vérifie si une valeur type %val% est présente dans le tableau
+     * @param string $toFind : mot à rechercher dans le tableau
+     * @param array $array : tableau dans lequel chercher la valeur
+     * @return bool : true si une valeur correspondante est trouvée, false sinon
+     */
+
     private function in_array_like(string $toFind, array $array)
     {
         foreach ($array as $vals) {
@@ -125,6 +132,12 @@ class Form extends Model
 
         return false;
     }
+
+    /**
+     * Vérifie si une colonne est une clée étrangère dans sa table
+     * @param string $column : nom de la colonne à vérifier
+     * @return bool : true si c'est une foreign_key, false sinon
+     */
 
     public function is_fk(string $column)
     {
@@ -150,6 +163,12 @@ class Form extends Model
         return false;
     }
 
+    /**
+     * Récupère le nom, la table de référence et la colonne de référence d'un clé étrangère
+     * @param string $column : colonne de type foreign_key
+     * @return array : tableau associatif
+     */
+    
     public function fk_infos(string $column)
     {
         if ($this->is_fk($column)) {
@@ -169,5 +188,9 @@ class Form extends Model
         } else {
             throw new Exception('La colonne selectionnée n\'est pas une clé étrangère');
         }
+    }
+
+    public function printSelect(){
+
     }
 }

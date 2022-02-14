@@ -276,4 +276,9 @@ class Connexion
     {
         return $this->options;
     }
+
+    public function getPDO(): PDO
+    {
+        return $this->dbh;
+    }
 }

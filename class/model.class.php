@@ -2,7 +2,7 @@
 
 include_once 'connexion.class.php';
 
-final class Model extends Connexion
+class Model extends Connexion
 {
 
     private $tab;
@@ -17,7 +17,7 @@ final class Model extends Connexion
         int $newPort = 3306
     ) {
         $this->setConfig($newEngine, $newHost, $newDBName, $newUser, $newPass, $newPort);
-        $this->dbh = $this->connect();
+        $this->connect();
 
     }
 
@@ -32,7 +32,7 @@ final class Model extends Connexion
             $query = 'SHOW KEYS FROM ' . $this->getTab() . ' WHERE Key_name = \'PRIMARY\'';
             // return parent::getData($query)[0]['Column_name'];
 
-            $stmt = $this->dbh->query($query);
+            $stmt = $this->getPDO()->query($query);
 
             return $stmt->fetch()['Column_name'];
         } catch (PDOException $e) {
@@ -53,7 +53,7 @@ final class Model extends Connexion
             $param = array($col);
             return !empty($this->getData($query, $param));
 
-            // $stmt = $this->dbh->prepare($query);
+            // $stmt = $this->getPDO()->prepare($query);
             // $stmt->execute(array($col));
 
             // return ($stmt->rowCount() > 0) ? true : false;
@@ -179,11 +179,11 @@ final class Model extends Connexion
                     implode(', ', array_keys($params))
                 );
 
-                $stmt = $this->dbh->prepare($query);
+                $stmt = $this->getPDO()->prepare($query);
                 $res = $stmt->execute($params);
 
                 return (!$getid) ?
-                $res : $this->dbh->lastInsertId();
+                $res : $this->getPDO()->lastInsertId();
 
             } catch (PDOException $e) {
                 throw new PDOException($e->getMessage());
@@ -218,7 +218,7 @@ final class Model extends Connexion
 
             try {
                 $query = 'UPDATE ' . $this->getTab() . ' SET ' . implode(', ', $vals) . ' WHERE ' . $this->getPrimary() . ' = :id';
-                $stmt = $this->dbh->prepare($query);
+                $stmt = $this->getPDO()->prepare($query);
 
                 return $stmt->execute($params);
             } catch (PDOException $e) {
@@ -239,7 +239,7 @@ final class Model extends Connexion
     {
         try {
             $query = 'DELETE FROM ' . $this->getTab() . ' WHERE ' . $this->getPrimary() . ' = ?';
-            $stmt = $this->dbh->prepare($query);
+            $stmt = $this->getPDO()->prepare($query);
             return $stmt->execute(array($id));
         } catch (PDOException $e) {
             throw new PDOException($e->getMessage());
@@ -250,10 +250,6 @@ final class Model extends Connexion
     public function getTab(){
 
         return $this->tab;
-    }
-
-    public function getPdo(){
-        return $this->dbh;
     }
 
     // Mutateur
