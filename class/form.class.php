@@ -5,11 +5,6 @@ include_once 'model.class.php';
 class Form extends Model
 {
 
-    private $dbh;
-    private $query;
-
-
-
     public function __construct(
         string $newEngine,
         string $newHost,
@@ -36,74 +31,43 @@ class Form extends Model
                 // On transforme le nom des colonnes voulues en tableau pour le manipuler plus tard
                 $colNames = explode(',', $tab[1]);
 
-                // On récupère les informations des colonnes de la table
-                $sql = "SHOW COLUMNS FROM " . $this->getTab();
-                $data = array();
-                foreach ($this->getData($sql) as $col) {
-                    // On crée un tableau associatif de type : $nomColonne => array $typeColonne (sans alias)
-                    $data[$col['Field']] = explode(" ", $col['Type']);
-                }
-
-                // On crée un tableau de type : nomColonne => type d'input
-                $inputs = array();
-                foreach ($data as $key => $val) {
-                    if ($this->in_array_like('varchar', $val)) {
-
-                        switch ($key) {
-                            case 'email':
-                                $inputs[$key] = 'email';
-                                break;
-                            case 'password':
-                                $inputs[$key] = 'password';
-                            default:
-                                $inputs[$key] = 'text';
-                                break;
-                        }
-                    } elseif ($this->in_array_like('int', $val)) {
-                        $inputs[$key] = 'number';
-                    }
-                }
-
-                // On doit maintenant faire les modifications en fonction des PK et FK
-                foreach($inputs as $key => $val){
-                    if($this->is_fk($key)){
-                        $inputs[$key] = 'select';
-                    }
-                }
+                // On appelle notre fonction qui renvoi un tableau associatif avec le nom et le type d'input
+                $inputs = $this->checkColumns();
 
                 // On crée un formulaire
                 $print = '<form action="" method="post" class="ui edit user form container">';
                 // Pour chaque inputs de type : nomColonne => type d'input, on crée un label
                 foreach ($inputs as $key => $val) {
-
+                    $this->setTab($tabName);
                     // On affiche seulement les colonnes demandées
-                    if(in_array($key, $colNames) || $colNames[0] == '*'){
+                    if (in_array($key, $colNames) || $colNames[0] == '*') {
                         $print .= '<div class="field">';
-                        $print .= '<label>' . $key . '</label>';
-                        // Si l'input et de type text, email, password ou number alors on crée un input simple
-                        if ($val !== 'select') {
-                            $print .= '<input type="' . $val . '" name="' . $key . '">';
-                        } else {
-                            // Sinon on crée un select
-                            $print .= '<select name="' . $key . '" class="ui search dropdown">';
-                        
-                            $fks = $this->fk_infos($key);
-                            foreach($fks as $fk){
-                                $this->setTab($fk["REFERENCED_TABLE_NAME"]);
-                                $x = $this->getData("SELECT * FROM " . $fk["REFERENCED_TABLE_NAME"]);
-                                foreach ($x as $row) {
-                                    $print .= '<option value="' . $row[$this->getPrimary()] . '">' . $row[$this->getPrimary()] . '</option>';
-                                }
-                            }
-                            
-                            $print .= '</select>';
+                        ($val != 'hidden') ? $print .= '<label>' . $key . '</label>' : '';
+
+                        // test pour décentraliser la création de select et pouvoir utiliser la récursivité
+                        switch ($val) {
+                            case 'select':
+                                // On récupère les informations sur la foreign_key
+                                $infos = $this->fk_infos($key);
+                                // On crée un select pour chaque foreign_key
+                                $print .= '<select name="' . $key . '">';
+                                // On appelle notre fonction printOptions qui va envoyer le code html des balises options
+                                // à partir des tables de référence de nos foreign_keys
+                                $print .= $this->printOptions($infos[0]["REFERENCED_TABLE_NAME"]);
+                                $print .= '</select>';
+                                // Attention à bien reconfigurer la table sur laquelle on travaille
+                                $this->setTab($tabName);
+                                break;
+                            default:
+                                $print .= '<input type="' . $val . '" name="' . $key . '">';
+                                break;
                         }
 
                         $print .= '</div>';
                     }
                 }
 
-                $print .= '<input type="submit" value="Envoyer">';
+                $print .= '<button class="ui button" type="submit">Envoyer</button>';
                 $print .= '</form>';
 
                 return $print;
@@ -149,8 +113,8 @@ class Form extends Model
                 FROM
                 INFORMATION_SCHEMA.KEY_COLUMN_USAGE
                 WHERE
-                REFERENCED_TABLE_SCHEMA = '".$this->getDBName()."'
-                AND TABLE_NAME = '" . $this->getTab()."'";
+                REFERENCED_TABLE_SCHEMA = '" . $this->getDBName() . "'
+                AND TABLE_NAME = '" . $this->getTab() . "'";
         // On a alors un tableau associatif de qui contient : Nom de la colonne FK, table de référence, colonne de référence dans cette dernière
         $fk = $this->getData($sql);
 
@@ -164,11 +128,11 @@ class Form extends Model
     }
 
     /**
-     * Récupère le nom, la table de référence et la colonne de référence d'un clé étrangère
+     * Récupère le nom, la table de référence et la colonne de référence d'une clé étrangère
      * @param string $column : colonne de type foreign_key
      * @return array : tableau associatif
      */
-    
+
     public function fk_infos(string $column)
     {
         if ($this->is_fk($column)) {
@@ -180,7 +144,7 @@ class Form extends Model
             INFORMATION_SCHEMA.KEY_COLUMN_USAGE
             WHERE
             REFERENCED_TABLE_SCHEMA = '" . $this->getDBName() . "'
-            AND TABLE_NAME = '" . $this->getTab()."'
+            AND TABLE_NAME = '" . $this->getTab() . "'
             AND COLUMN_NAME = '$column'";
 
             // On retourne alors un tableau associatif de qui contient : Nom de la colonne FK, table de référence, colonne de référence dans cette dernière
@@ -190,7 +154,96 @@ class Form extends Model
         }
     }
 
-    public function printSelect(){
+    /**
+     * Vérifie les informations des colonnes de la table en cours,
+     * mais également les colonnes qui sont foreign_key et leur assigne comme type d'input 'select'
+     * @return array : tableau associatif de type nomColonne => typeInput
+     */
 
+    public function checkColumns(): array
+    {
+        // On récupère les informations des colonnes de la table
+        $sql = "SHOW COLUMNS FROM " . $this->getTab();
+        $data = array();
+        foreach ($this->getData($sql) as $col) {
+            // On crée un tableau associatif de type : $nomColonne => array $typeColonne (sans alias)
+            $data[$col['Field']] = explode(" ", $col['Type']);
+        }
+
+        // On crée un tableau de type : nomColonne => typeInput
+        $inputs = array();
+        foreach ($data as $key => $val) {
+            if ($this->in_array_like('char', $val) || $this->in_array_like('text', $val)) {
+
+                switch ($key) {
+                    case 'email':
+                        $inputs[$key] = 'email';
+                        break;
+                    case 'password':
+                        $inputs[$key] = 'password';
+                    default:
+                        $inputs[$key] = 'text';
+                        break;
+                }
+            } elseif ($this->in_array_like('int', $val)) {
+                $inputs[$key] = 'number';
+            } else {
+                $inputs[$key] = 'undefined';
+            }
+        }
+
+        // On doit maintenant faire les modifications en fonction des PK et FK
+        foreach ($inputs as $key => $val) {
+            if ($this->is_fk($key)) {
+                $inputs[$key] = 'select';
+            } elseif ($key == $this->getPrimary()) {
+                $inputs[$key] = 'hidden';
+            }
+        }
+
+        return $inputs;
+    }
+
+    /**
+     * Renvoi les options dans le cas d'un select
+     * @param string $table : table sur laquelle on veut récupérer les informations
+     * @return string : code html des options à mettre dans un select
+     */
+
+    public function printOptions(string $table)
+    {
+        // On utilise la table passée en argument
+        $table = htmlspecialchars($table);
+        $this->setTab($table);
+
+        // On récupère les informations des colonnes de notre table
+        $inputs = $this->checkColumns();
+
+        // On cherche l'index de la première colonne de type varchar de notre table
+        $description = array_search('text', $inputs);
+        $index = array_search('select', $inputs);
+
+        // On récupère toutes les informations de notre table
+        $query = "SELECT * FROM " . $table;
+        $data = $this->getData($query);
+
+        // Trois cas : soit la table possède une colonne de type varchar auquel cas on ajoute son contenu dans notre option
+        // Soit la table n'en possède pas, et dans ce cas on relance la fonction avec la première Foreign_key de la table
+        // Si elle ne possède ni l'un ni l'autre alors on affiche la valeur de la PK
+        $print = '';
+        if ($description) {
+            foreach ($data as $row) {
+                $print .= '<option value="' . $row[$this->getPrimary()] . '">' . $row[$description] . '</option>';
+            }
+        } elseif ($index) {
+            $infos = $this->fk_infos($index);
+            $print .= $this->printOptions($infos[0]['REFERENCED_TABLE_NAME']);
+        } else {
+            foreach ($data as $row) {
+                $print .= '<option value="' . $row[$this->getPrimary()] . '">' . $row[$this->getPrimary()] . '</option>';
+            }
+        }
+
+        return $print;
     }
 }
