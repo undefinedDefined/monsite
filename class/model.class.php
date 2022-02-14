@@ -88,7 +88,7 @@ class Model extends Connexion
      * @return array : tableau associatif
      */
 
-    public function getRowFromId(int $id): array
+    public function getRowById(int $id): array
     {
         try {
 

@@ -2,6 +2,7 @@
 
 include_once "class/form.class.php";
 include_once "inc/globals.php";
+include_once "class/form.test.php";
 
 ?>
 
@@ -24,10 +25,15 @@ include_once "inc/globals.php";
 <body>
     <?php
 
-    $form = new Form('mysql', SERVER, DBB, USER, PASS);
-    // $form->setTab('film_actor');
-    // var_dump($form->is_fk('original_language_id'));
-    echo $form->printForm("select * from customer");
+    // $form = new Form('mysql', SERVER, DBB, USER, PASS);
+    // echo $form->printForm("select customer_id,first_name,last_name from customer");
+
+    $test = new Test('mysql', SERVER, DBB, USER, PASS);
+    echo $test->printForm("select customer_id ,first_name,last_name from customer");
+
+    // echo '<pre>';
+    // var_dump($cols);
+    // echo '</pre>';
 
     ?>
 
